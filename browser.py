@@ -2,6 +2,7 @@ import socket
 import ssl
 import os
 import time
+import gzip
 from typing import Dict
 
 class RequestHeader:
@@ -10,6 +11,7 @@ class RequestHeader:
     self._append("Host", host)
     self._append("User-Agent", "MinseongBrowser/1.0")
     self._append("Connection", "keep-alive")
+    self._append("Accept-Encoding", "gzip")
     self.request += "\r\n"
 
   def _append(self, key, value):
@@ -166,11 +168,11 @@ class URL:
     self.socket.send(header.encode())
 
     # TODO: Replace hardcoded encoding by parsing header `Content-Type`
-    response = self.socket.makefile("r", encoding="utf8", newline="\r\n")
+    response = self.socket.makefile("rb")
 
     statusline = response.readline()
     print(f"statusline: {statusline}")
-    version, status_code, explanation = statusline.split(" ", 2)
+    version, status_code, explanation = statusline.split(b" ", 2)
     status = Status(code=status_code)
     print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
     print(f"version: {version}")
@@ -180,11 +182,12 @@ class URL:
     response_headers = {}
     while True:
       line = response.readline()
-      if line == "\r\n":
+      if line == b"\r\n":
         break
-      header, value = line.split(":", 1)
+      header, value = line.split(b":", 1)
+      header = header.decode("utf8")
+      value = value.decode("utf8")
       response_headers[header.casefold()] = value.strip()
-    assert "content-encoding" not in response_headers
 
     if redirect_count < 5 and status.is_redirect():
       location = response_headers.get("location")
@@ -200,8 +203,12 @@ class URL:
       return self.request(redirect_count=redirect_count + 1)
 
     content_length = response_headers["content-length"]
+    content_encoding = response_headers["content-encoding"]
     raw_body = response.read(int(content_length))
-    body = Body(content=raw_body, is_view_source=self.is_view_source)
+    if content_encoding == "gzip":
+      raw_body = gzip.decompress(raw_body)
+    print(raw_body.decode("utf8"))
+    body = Body(content=raw_body.decode("utf8"), is_view_source=self.is_view_source)
 
     cache_control_raw = response_headers.get("cache-control")
     if not cache_control_raw is None:
