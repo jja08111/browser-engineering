@@ -22,7 +22,7 @@ class URL:
       self.scheme, url = url.split(":", 1)
       url, self.data = url.split(",", 1)
       self.data += "\r\n"
-      if url in ";":
+      if ";" in url:
         self.media_type, url = url.split(";", 1)
       else:
         self.media_type = url
@@ -30,7 +30,7 @@ class URL:
       return
 
     url = self._ensure_scheme(url)
-
+    print(url)
     self.scheme, url = url.split("://", 1)
     if self.scheme == "http":
       self.port = 80
@@ -50,7 +50,7 @@ class URL:
       self.port = int(port)
 
   def _ensure_scheme(self, url: str) -> str:
-    if url in "://":
+    if "://" in url:
       return url
     return f"file://{url}"
 
