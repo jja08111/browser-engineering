@@ -7,7 +7,7 @@ class RequestHeader:
     self.request = f"GET {path} HTTP/1.1\r\n"
     self._append("Host", host)
     self._append("User-Agent", "MinseongBrowser/1.0")
-    self._append("Connection", "close")
+    self._append("Connection", "keep-alive")
     self.request += "\r\n"
 
   def _append(self, key, value):
@@ -23,6 +23,7 @@ class Body:
 
 class URL:
   def __init__(self, url: str):
+    self.socket = None
     self.is_view_source = False
     if url.startswith("data:"):
       self.scheme, url = url.split(":", 1)
@@ -83,21 +84,22 @@ class URL:
     elif self.scheme == "data":
       return self.data
 
-    s = socket.socket(
-      family=socket.AF_INET,
-      type=socket.SOCK_STREAM,
-      proto=socket.IPPROTO_TCP,
-    )
-    s.connect((self.host, self.port))
-    if (self.scheme == "https"):
-      ctx = ssl.create_default_context()
-      s = ctx.wrap_socket(s, server_hostname=self.host)
+    if self.socket is None:
+      self.socket = socket.socket(
+        family=socket.AF_INET,
+        type=socket.SOCK_STREAM,
+        proto=socket.IPPROTO_TCP,
+      )
+      self.socket.connect((self.host, self.port))
+      if (self.scheme == "https"):
+        ctx = ssl.create_default_context()
+        self.socket = ctx.wrap_socket(self.socket, server_hostname=self.host)
 
     header = RequestHeader(path=self.path, host=self.host)
-    s.send(header.encode())
+    self.socket.send(header.encode())
 
     # TODO: Replace hardcoded encoding by parsing header `Content-Type`
-    response = s.makefile("r", encoding="utf8", newline="\r\n")
+    response = self.socket.makefile("r", encoding="utf8", newline="\r\n")
 
     statusline = response.readline()
     version, status, explanation = statusline.split(" ", 2)
@@ -115,8 +117,8 @@ class URL:
       response_headers[header.casefold()] = value.strip()
     assert "content-encoding" not in response_headers
 
-    body = response.read()
-    s.close()
+    content_length = response_headers["content-length"]
+    body = response.read(int(content_length))
     return Body(content=body, is_view_source=self.is_view_source)
 
 def show(body: Body):
@@ -144,6 +146,9 @@ def show(body: Body):
     index += 1
 
 def load(url):
+  body = url.request()
+  show(body)
+
   body = url.request()
   show(body)
 
