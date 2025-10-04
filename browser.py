@@ -112,13 +112,22 @@ class URL:
 
 def show(body: str):
   in_tag = False
-  for c in body:
+  index = 0
+  while (index < body.__len__()):
+    c = body[index]
     if c == "<":
       in_tag = True
     elif c == ">":
       in_tag = False
+    elif body.startswith("&lt;", index):
+      print("<", end="")
+      index += 3
+    elif body.startswith("&gt;", index):
+      print(">", end="")
+      index += 3
     elif not in_tag:
       print(c, end="")
+    index += 1
 
 def load(url):
   body = url.request()
