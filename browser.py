@@ -16,8 +16,15 @@ class RequestHeader:
   def encode(self):
     return self.request.encode("utf8")
 
+class Status:
+  def __init__(self, code: str):
+    self.code = int(code)
+
+  def is_redirect(self) -> bool:
+    return 300 <= self.code < 400
+
 class Body:
-  def __init__(self, content: str, is_view_source: bool):
+  def __init__(self, content: str, is_view_source: bool=False):
     self.content = content
     self.is_view_source = is_view_source
 
@@ -78,11 +85,33 @@ class URL:
     with open(self.path, "rb") as f:
       return f.read().decode("utf8")
 
-  def request(self) -> Body:
+  def _resolve_location(self, location: str) -> str:
+    # already absolute URL (has scheme)
+    if "://" in location:
+      return location
+    # scheme-relative: //host/path
+    if location.startswith("//"):
+      return f"{self.scheme}:{location}"
+    # absolute-path on same origin: /path...
+    if location.startswith("/"):
+      return f"{self.scheme}://{self.host}:{self.port}/{location}"
+    # relative path (no leading slash) -> join with base dir of self.path
+    # self.path is like "/dir/page" or "/page"
+    base_dir = self.path.rsplit("/", 1)[0]  # '/dir' or ''
+    if base_dir == "":
+      base_dir = "/"
+    # ensure single slash between
+    if base_dir.endswith("/"):
+      joined = f"{base_dir}{location}"
+    else:
+      joined = f"{base_dir}/{location}"
+    return f"{self.scheme}://{self.host}:{self.port}/{joined}"
+
+  def request(self, redirect_count: int = 0) -> Body:
     if self.scheme == "file":
-      return self._open_file_path()
+      return Body(content=self._open_file_path())
     elif self.scheme == "data":
-      return self.data
+      return Body(content=self.data)
 
     if self.socket is None:
       self.socket = socket.socket(
@@ -102,7 +131,8 @@ class URL:
     response = self.socket.makefile("r", encoding="utf8", newline="\r\n")
 
     statusline = response.readline()
-    version, status, explanation = statusline.split(" ", 2)
+    version, status_code, explanation = statusline.split(" ", 2)
+    status = Status(code=status_code)
     print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
     print(f"version: {version}")
     print(f"status: {status}")
@@ -116,6 +146,19 @@ class URL:
       header, value = line.split(":", 1)
       response_headers[header.casefold()] = value.strip()
     assert "content-encoding" not in response_headers
+
+    if redirect_count < 5 and status.is_redirect():
+      location = response_headers.get("location")
+      if location is None:
+        raise RuntimeError("Redirect status, but no Location header")
+      location = self._resolve_location(location)
+      try:
+        self.socket.close()
+        self.socket = None
+      except Exception:
+        pass
+      self.__init__(location)
+      return self.request(redirect_count=redirect_count + 1)
 
     content_length = response_headers["content-length"]
     body = response.read(int(content_length))
@@ -146,9 +189,6 @@ def show(body: Body):
     index += 1
 
 def load(url):
-  body = url.request()
-  show(body)
-
   body = url.request()
   show(body)
 
