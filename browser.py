@@ -1,8 +1,9 @@
 import socket
 import ssl
+import os
 
 class RequestHeader:
-  def __init__(self, path, host):
+  def __init__(self, path: str, host: str):
     self.request = f"GET {path} HTTP/1.1\r\n"
     self._append("Host", host)
     self._append("User-Agent", "MinseongBrowser/1.0")
@@ -16,12 +17,18 @@ class RequestHeader:
     return self.request.encode("utf8")
 
 class URL:
-  def __init__(self, url):
+  def __init__(self, url: str):
+    url = self._ensure_scheme(url)
+
     self.scheme, url = url.split("://", 1)
     if self.scheme == "http":
       self.port = 80
     elif self.scheme == "https":
       self.port = 443
+    elif self.scheme == "file":
+      self.path = url
+      return
+
     if "/" not in url:
       url = url + "/"
     self.host, url = url.split("/", 1)
@@ -31,7 +38,29 @@ class URL:
       self.host, port = self.host.split(":", 1)
       self.port = int(port)
 
-  def request(self):
+  def _ensure_scheme(self, url: str) -> str:
+    if url in "://":
+      return url
+    return f"file://{url}"
+
+  def _open_file_path(self, allowed_root: str = None) -> str:
+    if allowed_root:
+      allowed_root = os.path.realpath(allowed_root)
+      if not os.path.commonpath([allowed_root, self.path]) == allowed_root:
+        raise PermissionError("access outside allowed root")
+
+    if not os.path.exists(self.path):
+      raise FileNotFoundError(self.path)
+    if not os.path.isfile(self.path):
+      raise IsADirectoryError(self.path)
+
+    with open(self.path, "rb") as f:
+      return f.read().decode("utf8")
+
+  def request(self) -> str:
+    if self.scheme == "file":
+      return self._open_file_path()
+
     s = socket.socket(
       family=socket.AF_INET,
       type=socket.SOCK_STREAM,
@@ -68,7 +97,7 @@ class URL:
     s.close()
     return body
 
-def show(body):
+def show(body: str):
   in_tag = False
   for c in body:
     if c == "<":
