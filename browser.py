@@ -18,6 +18,17 @@ class RequestHeader:
 
 class URL:
   def __init__(self, url: str):
+    if url.startswith("data:"):
+      self.scheme, url = url.split(":", 1)
+      url, self.data = url.split(",", 1)
+      self.data += "\r\n"
+      if url in ";":
+        self.media_type, url = url.split(";", 1)
+      else:
+        self.media_type = url
+      assert(self.media_type == "text/html")
+      return
+
     url = self._ensure_scheme(url)
 
     self.scheme, url = url.split("://", 1)
@@ -60,6 +71,8 @@ class URL:
   def request(self) -> str:
     if self.scheme == "file":
       return self._open_file_path()
+    elif self.scheme == "data":
+      return self.data
 
     s = socket.socket(
       family=socket.AF_INET,
