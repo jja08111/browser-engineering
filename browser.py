@@ -1,6 +1,8 @@
 import socket
 import ssl
 import os
+import time
+from typing import Dict
 
 class RequestHeader:
   def __init__(self, path: str, host: str):
@@ -16,6 +18,21 @@ class RequestHeader:
   def encode(self):
     return self.request.encode("utf8")
 
+class CacheControl:
+  def __init__(self, raw: str):
+    assert(raw.__len__() > 0)
+    directives = raw.split(",")
+    self.no_store = False
+    self.max_age = 0
+    for directive in directives:
+      if "=" in directive:
+        key, value = directive.split("=")
+        if key == "max-age":
+          self.max_age = int(value)
+      else:
+        if directive == "no-store":
+          self.no_store = True
+
 class Status:
   def __init__(self, code: str):
     self.code = int(code)
@@ -28,8 +45,14 @@ class Body:
     self.content = content
     self.is_view_source = is_view_source
 
+class Cache:
+  def __init__(self, body: Body, max_age: int):
+    self.body = body
+    self.expired_at = time.time() + max_age
+
 class URL:
   def __init__(self, url: str):
+    self.caches: Dict[str, Cache] = dict()
     self.socket = None
     self.is_view_source = False
     if url.startswith("data:"):
@@ -47,7 +70,6 @@ class URL:
       self.is_view_source = True
 
     url = self._ensure_scheme(url)
-    print(url)
     self.scheme, url = url.split("://", 1)
     if self.scheme == "http":
       self.port = 80
@@ -70,6 +92,13 @@ class URL:
     if "://" in url:
       return url
     return f"file://{url}"
+
+  def _get_url(self) -> str:
+    assert(self.scheme)
+    assert(self.host)
+    assert(self.path)
+    assert(self.port)
+    return f"{self.scheme}://{self.host}:{self.port}/{self.path}"
 
   def _open_file_path(self, allowed_root: str = None) -> str:
     if allowed_root:
@@ -113,6 +142,15 @@ class URL:
     elif self.scheme == "data":
       return Body(content=self.data)
 
+    # TODO: Move cache to local file?
+    url = self._get_url()
+    cache = self.caches.get(url)
+    if not cache is None:
+      if cache.expired_at > time.time():
+        return cache.body
+      else:
+        self.caches.pop(url)
+
     if self.socket is None:
       self.socket = socket.socket(
         family=socket.AF_INET,
@@ -131,6 +169,7 @@ class URL:
     response = self.socket.makefile("r", encoding="utf8", newline="\r\n")
 
     statusline = response.readline()
+    print(f"statusline: {statusline}")
     version, status_code, explanation = statusline.split(" ", 2)
     status = Status(code=status_code)
     print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
@@ -161,8 +200,19 @@ class URL:
       return self.request(redirect_count=redirect_count + 1)
 
     content_length = response_headers["content-length"]
-    body = response.read(int(content_length))
-    return Body(content=body, is_view_source=self.is_view_source)
+    raw_body = response.read(int(content_length))
+    body = Body(content=raw_body, is_view_source=self.is_view_source)
+
+    cache_control_raw = response_headers.get("cache-control")
+    if not cache_control_raw is None:
+      cache_control = CacheControl(raw=cache_control_raw)
+      if not cache_control.no_store and cache_control.max_age > 0:
+        self.caches[url] = Cache(
+          body=body, 
+          max_age=cache_control.max_age
+        )
+
+    return body
 
 def show(body: Body):
   in_tag = False
@@ -189,6 +239,9 @@ def show(body: Body):
     index += 1
 
 def load(url):
+  body = url.request()
+  show(body)
+
   body = url.request()
   show(body)
 
