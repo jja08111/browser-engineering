@@ -16,8 +16,14 @@ class RequestHeader:
   def encode(self):
     return self.request.encode("utf8")
 
+class Body:
+  def __init__(self, content: str, is_view_source: bool):
+    self.content = content
+    self.is_view_source = is_view_source
+
 class URL:
   def __init__(self, url: str):
+    self.is_view_source = False
     if url.startswith("data:"):
       self.scheme, url = url.split(":", 1)
       url, self.data = url.split(",", 1)
@@ -28,6 +34,9 @@ class URL:
         self.media_type = url
       assert(self.media_type == "text/html")
       return
+    if url.startswith("view-source"):
+      _, url = url.split(":", 1)
+      self.is_view_source = True
 
     url = self._ensure_scheme(url)
     print(url)
@@ -68,7 +77,7 @@ class URL:
     with open(self.path, "rb") as f:
       return f.read().decode("utf8")
 
-  def request(self) -> str:
+  def request(self) -> Body:
     if self.scheme == "file":
       return self._open_file_path()
     elif self.scheme == "data":
@@ -108,21 +117,26 @@ class URL:
 
     body = response.read()
     s.close()
-    return body
+    return Body(content=body, is_view_source=self.is_view_source)
 
-def show(body: str):
+def show(body: Body):
   in_tag = False
   index = 0
-  while (index < body.__len__()):
-    c = body[index]
+  content = body.content
+  if (body.is_view_source):
+    print(body.content)
+    return
+
+  while (index < content.__len__()):
+    c = content[index]
     if c == "<":
       in_tag = True
     elif c == ">":
       in_tag = False
-    elif body.startswith("&lt;", index):
+    elif content.startswith("&lt;", index):
       print("<", end="")
       index += 3
-    elif body.startswith("&gt;", index):
+    elif content.startswith("&gt;", index):
       print(">", end="")
       index += 3
     elif not in_tag:
