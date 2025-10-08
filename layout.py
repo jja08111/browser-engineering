@@ -2,6 +2,7 @@
 from constant import WIDTH
 
 HSTEP, VSTEP = 13, 18
+NEWLINE_STEP = 24
 
 def layout(text: str):
   display_list = []
@@ -12,5 +13,8 @@ def layout(text: str):
     if cursor_x >= WIDTH - HSTEP:
       cursor_x = 0
       cursor_y += VSTEP
+    elif c == "\n":
+      cursor_x = 0
+      cursor_y += NEWLINE_STEP
   
   return display_list
