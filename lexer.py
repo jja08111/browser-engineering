@@ -1,14 +1,13 @@
 from body import Body
-from url import URL
 
-def show(body: Body):
+def lex(body: Body) -> str:
   in_tag = False
   index = 0
   content = body.content
   if (body.is_view_source):
-    print(body.content)
-    return
+    return body.content
 
+  text = ""
   while (index < content.__len__()):
     c = content[index]
     if c == "<":
@@ -16,22 +15,12 @@ def show(body: Body):
     elif c == ">":
       in_tag = False
     elif content.startswith("&lt;", index):
-      print("<", end="")
+      text += "<"
       index += 3
     elif content.startswith("&gt;", index):
-      print(">", end="")
+      text += ">"
       index += 3
     elif not in_tag:
-      print(c, end="")
+      text += c
     index += 1
-
-def load(url):
-  body = url.request()
-  show(body)
-
-  body = url.request()
-  show(body)
-
-if __name__ == "__main__":
-  import sys
-  load(URL(sys.argv[1]))
+  return text

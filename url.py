@@ -96,6 +96,50 @@ class URL:
       joined = f"{base_dir}/{location}"
     return f"{self.scheme}://{self.host}:{self.port}/{joined}"
 
+  def _read_chunked(self, response) -> bytes:
+    body = b""
+    while True:
+      # 청크 크기 라인 읽기 (예: b'1a3\r\n' 또는 b'1a3;extension=... \r\n')
+      line = response.readline()
+      if not line:
+        raise RuntimeError("Unexpected EOF while reading chunk size")
+      # strip CRLF and whitespace
+      line_str = line.strip().decode("utf8")
+      # chunk-size may have extensions after ';' -> split
+      if ";" in line_str:
+        size_str = line_str.split(";", 1)[0]
+      else:
+        size_str = line_str
+      try:
+        chunk_size = int(size_str, 16)
+      except ValueError:
+        raise RuntimeError(f"Invalid chunk size line: {line_str!r}")
+
+      if chunk_size == 0:
+        # 마지막 청크. 이후 트레일러 헤더(있다면) 읽고 끝
+        # 읽다가 빈 줄(b'\r\n') 나오면 끝
+        while True:
+          trailer_line = response.readline()
+          if not trailer_line:
+            break
+          if trailer_line == b"\r\n":
+            break
+          # (필요하면 트레일러를 파싱할 수 있음)
+        break
+
+      # 지정된 바이트만큼 읽음. read()는 정확히 chunk_size 바이트를 반환할 때까지 블로킹.
+      chunk = response.read(chunk_size)
+      if len(chunk) < chunk_size:
+        raise RuntimeError("Unexpected EOF while reading chunk data")
+      body += chunk
+      # 청크 끝의 CRLF 소비
+      crlf = response.read(2)
+      if crlf != b"\r\n":
+        # 일부 서버가 CRLF를 다르게 줄 수 있으니 관대하게 처리하거나 오류로 본다.
+        # 여기서는 오류로 처리.
+        raise RuntimeError("Missing CRLF after chunk data")
+    return body
+
   def request(self, redirect_count: int = 0) -> Body:
     if self.scheme == "file":
       return Body(content=self._open_file_path())
@@ -146,6 +190,7 @@ class URL:
       header = header.decode("utf8")
       value = value.decode("utf8")
       response_headers[header.casefold()] = value.strip()
+      print(f"{header}: {value}")
 
     if redirect_count < 5 and status.is_redirect():
       location = response_headers.get("location")
@@ -160,12 +205,20 @@ class URL:
       self.__init__(location)
       return self.request(redirect_count=redirect_count + 1)
 
-    content_length = response_headers["content-length"]
-    content_encoding = response_headers["content-encoding"]
-    raw_body = response.read(int(content_length))
+    content_length = response_headers.get("content-length")
+    transfer_encoding = response_headers.get("transfer-encoding")
+    content_encoding = response_headers.get("content-encoding")
+    
+    if transfer_encoding and "chunked" in transfer_encoding.lower():
+      raw_body = self._read_chunked(response)
+    elif content_length:
+      raw_body = response.read(int(content_length))
+    else:
+      raw_body = response.read()
+
     if content_encoding == "gzip":
       raw_body = gzip.decompress(raw_body)
-    print(raw_body.decode("utf8"))
+
     body = Body(content=raw_body.decode("utf8"), is_view_source=self.is_view_source)
 
     cache_control_raw = response_headers.get("cache-control")

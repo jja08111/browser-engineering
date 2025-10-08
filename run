@@ -1,2 +1,2 @@
 #!/bin/bash
-python3 main.py "$@"
+/opt/homebrew/bin/python3 browser.py "$@"
