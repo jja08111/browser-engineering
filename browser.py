@@ -14,11 +14,27 @@ class Browser:
     )
     self.canvas.pack()
     self.scroll = 0
+    self.window.bind("<Up>", self.scrollup)
     self.window.bind("<Down>", self.scrolldown)
+    self.window.bind("<MouseWheel>", self.on_mouse_wheel)
+
+  def _scroll_internal(self, delta: float):
+    self.scroll -= delta
+    if self.scroll < 0:
+      self.scroll = 0
+    self.draw()
+
+  def scrollup(self, _):
+    self._scroll_internal(-SCROLL_STEP)
 
   def scrolldown(self, _): 
-    self.scroll += SCROLL_STEP
-    self.draw()
+    self._scroll_internal(SCROLL_STEP)
+  
+  def on_mouse_wheel(self, e):
+    if e.delta > 0:
+      self._scroll_internal(e.delta)
+    elif e.delta < 0:
+      self._scroll_internal(e.delta)
 
   def draw(self):
     self.canvas.delete("all")
