@@ -80,9 +80,12 @@ class Browser:
     self.draw_scrollbar()
 
   def load(self, url: URL):
-    body = url.request()
-    self.text = lex(body)
-    self.layout_and_draw()
+    try:
+      body = url.request()
+      self.text = lex(body)
+      self.layout_and_draw()
+    except:
+      print("Error")
 
 if __name__ == "__main__":
   import sys
