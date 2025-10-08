@@ -17,10 +17,10 @@ def layout(text: str) -> List[DisplayList]:
     display_list.append((cursor_x, cursor_y, c))
     cursor_x += HSTEP
     if cursor_x >= WIDTH - HSTEP:
-      cursor_x = 0
+      cursor_x = HSTEP
       cursor_y += VSTEP
     elif c == "\n":
-      cursor_x = 0
+      cursor_x = HSTEP
       cursor_y += NEWLINE_STEP
   
   return display_list
