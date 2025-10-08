@@ -24,11 +24,14 @@ class Browser:
 
   def _scroll_internal(self, delta: float):
     self.scroll -= delta
+    window_height = self._window_height()
     max_y = self._content_max_y()
+    if max_y < window_height:
+      return
     if self.scroll < 0:
       self.scroll = 0
-    if self.scroll + self._window_height() > max_y:
-      self.scroll = max_y - self._window_height()
+    if self.scroll + window_height > max_y:
+      self.scroll = max_y - window_height
     self.draw_content()
     self.draw_scrollbar()
   
