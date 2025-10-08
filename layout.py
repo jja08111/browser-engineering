@@ -1,11 +1,17 @@
 
+from typing import List
 from constant import WIDTH
 
 HSTEP, VSTEP = 13, 18
 NEWLINE_STEP = 24
 
-def layout(text: str):
-  display_list = []
+class DisplayList:
+  x: int
+  y: int
+  c: str
+
+def layout(text: str) -> List[DisplayList]:
+  display_list: List[DisplayList] = []
   cursor_x, cursor_y = HSTEP, VSTEP
   for c in text:
     display_list.append((cursor_x, cursor_y, c))
