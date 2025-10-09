@@ -1,8 +1,10 @@
 import tkinter
 from constant import HEIGHT, SCROLL_STEP, SCROLLBAR_PADDING, SCROLLBAR_WIDTH, WIDTH
-from layout import VSTEP, Layout
+from layout import HSTEP, VSTEP, DisplayList, Layout
 from lexer import Tokens, lex
 from url import URL
+
+SCROLLBAR_BOX_WIDHT = SCROLLBAR_WIDTH + 2 * SCROLLBAR_PADDING
 
 class Browser:
   def __init__(self):
@@ -19,6 +21,7 @@ class Browser:
     self.window.bind("<MouseWheel>", self.on_mouse_wheel)
     self.window.bind("<Configure>", self.on_configure)
     self.tokens: Tokens = []
+    self.display_list: DisplayList = []
 
   def _content_max_y(self):
     return self.display_list[-1].y if self.display_list.__len__() else 0
@@ -38,9 +41,19 @@ class Browser:
   
   def _window_height(self):
     return self.canvas.winfo_height()
-  
-  def _window_width(self):
+
+  def _window_width(self) -> int:
     return self.canvas.winfo_width()
+
+  def _should_draw_scrollbar(self) -> bool:
+    max_y = self._content_max_y()
+    window_height = self._window_height()
+    return window_height < max_y
+
+  def _viewport_width(self) -> int:
+    if self._should_draw_scrollbar():
+      return self._window_width() - SCROLLBAR_BOX_WIDHT
+    return self._window_width()  
 
   def scrollup(self, _):
     self._scroll_internal(-SCROLL_STEP)
@@ -58,11 +71,11 @@ class Browser:
     self.layout_and_draw()
 
   def draw_scrollbar(self):
+    if not self._should_draw_scrollbar():
+      return
     max_y = self._content_max_y()
     window_height = self._window_height()
     window_width = self._window_width()
-    if window_height > max_y:
-      return
     scrollbar_height = window_height * (window_height / max_y)
     x = window_width - SCROLLBAR_WIDTH - SCROLLBAR_PADDING
     current_scroll_percentage = self.scroll / (max_y - window_height)
@@ -87,7 +100,7 @@ class Browser:
   def layout_and_draw(self):
     self.display_list = Layout(
       tokens=self.tokens,
-      window_width=self._window_width()
+      viewport_width=self._viewport_width()
     ).layout()
     self.draw_content()
     self.draw_scrollbar()

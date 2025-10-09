@@ -1,0 +1,3 @@
+SPACE = " "
+HYPHEN = "-"
+SOFT_HYPHEN = "\u00AD"

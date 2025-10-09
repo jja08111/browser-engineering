@@ -1,7 +1,7 @@
 from abc import abstractmethod
 import tkinter.font as tkfont 
 from typing import List
-from constant import SCROLLBAR_PADDING, SCROLLBAR_WIDTH
+import character_set
 from font_cache import get_font
 from font_weight import DEFAULT_WEIGHT, Weight
 from lexer import Text, Tokens
@@ -55,38 +55,31 @@ class SupLineItem(LineItem):
 DisplayList = List[DisplayItem]
 Line = List[LineItem]
 
-SCROLLBAR_BOX_WIDHT = SCROLLBAR_WIDTH + 2 * SCROLLBAR_PADDING
-
 class Layout:
-  def __init__(self, tokens: Tokens, window_width: int):
+  def __init__(self, tokens: Tokens, viewport_width: int):
     self.display_list: DisplayList = []
     self.cursor_x: int = HSTEP
     self.cursor_y: int = VSTEP
     self.weight: Weight = DEFAULT_WEIGHT
     self.style: Style = DEFAULT_STYLE
-    self.window_width: int = window_width
+    self.viewport_width: int = viewport_width
     self.tokens: Tokens = tokens
     self.size: int = 12
     self.line: Line = []
     self.is_sup: bool = False
-  
-  def _content_width(self) -> int:
-    return self.window_width - SCROLLBAR_BOX_WIDHT - 2 * HSTEP
 
   def handle_word(self, word: str):
     font = get_font(self.size, self.weight, self.style)
-    word_width = font.measure(word)
+    word_and_space_width = font.measure(word) + font.measure(character_set.SPACE)
+    if self.cursor_x + word_and_space_width >= self.viewport_width:
+      self.flush()
     item = None
-    if self.is_sup: 
+    if self.is_sup:
       item = SupLineItem(x=self.cursor_x, text=word, font=font)
     else:
       item = LineItem(x=self.cursor_x, text=word, font=font)
     self.line.append(item)
-    self.cursor_x += word_width + font.measure(" ")
-    if self.cursor_x + word_width >= self._content_width():
-      self.cursor_y += font.metrics("linespace") * 1.25
-      self.cursor_x = HSTEP
-      self.flush()
+    self.cursor_x += word_and_space_width
 
   def flush(self):
     if not self.line:
@@ -135,7 +128,7 @@ class Layout:
       elif token.tag == "/h1":
         line_len = self.line.__len__()
         line_width = (self.cursor_x - self.line[0].x) if line_len else 0
-        start_x = (self._content_width() - line_width) / 2
+        start_x = (self.viewport_width - line_width) / 2
         for item in self.line:
           item.x += start_x
         self.flush()
