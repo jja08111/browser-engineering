@@ -1,5 +1,6 @@
 import tkinter.font as tkfont 
 from typing import List
+from constant import SCROLLBAR_PADDING, SCROLLBAR_WIDTH
 from font_cache import get_font
 from font_weight import DEFAULT_WEIGHT, Weight
 from lexer import Text, Tokens
@@ -45,6 +46,8 @@ class LineItem:
 DisplayList = List[DisplayItem]
 Line = List[LineItem]
 
+SCROLLBAR_BOX_WIDHT = SCROLLBAR_WIDTH + 2 * SCROLLBAR_PADDING
+
 class Layout:
   def __init__(self, tokens: Tokens, window_width: int):
     self.display_list: DisplayList = []
@@ -56,13 +59,16 @@ class Layout:
     self.tokens: Tokens = tokens
     self.size: int = 12
     self.line: Line = []
+  
+  def _content_width(self) -> int:
+    return self.window_width - SCROLLBAR_BOX_WIDHT - 2 * HSTEP
 
   def handle_word(self, word: str):
     font = get_font(self.size, self.weight, self.style)
     word_width = font.measure(word)
     self.line.append(LineItem(x=self.cursor_x, text=word, font=font))
     self.cursor_x += word_width + font.measure(" ")
-    if self.cursor_x + word_width >= self.window_width - HSTEP:
+    if self.cursor_x + word_width >= self._content_width():
       self.cursor_y += font.metrics("linespace") * 1.25
       self.cursor_x = HSTEP
       self.flush()
@@ -82,7 +88,6 @@ class Layout:
     self.cursor_x = HSTEP
     self.line = []
 
-  # TODO: Consider content view width because of scrollbar?
   def layout(self) -> List[DisplayItem]:
     for token in self.tokens:
       if isinstance(token, Text):
@@ -113,7 +118,7 @@ class Layout:
       elif token.tag == "/h1":
         line_len = self.line.__len__()
         line_width = (self.cursor_x - self.line[0].x) if line_len else 0
-        start_x = (self.window_width - line_width) / 2
+        start_x = (self._content_width() - line_width) / 2
         for item in self.line:
           item.x += start_x
         self.flush()
