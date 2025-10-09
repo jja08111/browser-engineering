@@ -1,3 +1,4 @@
+from abc import abstractmethod
 import tkinter.font as tkfont 
 from typing import List
 from constant import SCROLLBAR_PADDING, SCROLLBAR_WIDTH
@@ -42,6 +43,14 @@ class LineItem:
     yield self.x
     yield self.text
     yield self.font
+  
+  @abstractmethod
+  def is_sup(self) -> bool:
+    return False
+
+class SupLineItem(LineItem):
+  def is_sup(self) -> bool:
+    return True
 
 DisplayList = List[DisplayItem]
 Line = List[LineItem]
@@ -59,6 +68,7 @@ class Layout:
     self.tokens: Tokens = tokens
     self.size: int = 12
     self.line: Line = []
+    self.is_sup: bool = False
   
   def _content_width(self) -> int:
     return self.window_width - SCROLLBAR_BOX_WIDHT - 2 * HSTEP
@@ -66,7 +76,12 @@ class Layout:
   def handle_word(self, word: str):
     font = get_font(self.size, self.weight, self.style)
     word_width = font.measure(word)
-    self.line.append(LineItem(x=self.cursor_x, text=word, font=font))
+    item = None
+    if self.is_sup: 
+      item = SupLineItem(x=self.cursor_x, text=word, font=font)
+    else:
+      item = LineItem(x=self.cursor_x, text=word, font=font)
+    self.line.append(item)
     self.cursor_x += word_width + font.measure(" ")
     if self.cursor_x + word_width >= self._content_width():
       self.cursor_y += font.metrics("linespace") * 1.25
@@ -80,8 +95,10 @@ class Layout:
     max_ascent = max([metric["ascent"] for metric in metrics])
     # TODO: This is a simple implementation. We need to consider variant fonts.
     baseline = self.cursor_y + LEADING_RATIO * max_ascent
-    for x, word, font in self.line:
-      y = baseline - font.metrics("ascent")
+    for item in self.line:
+      (x, word, font) = item
+      ascent = font.metrics("ascent")
+      y = baseline - ascent if not item.is_sup() else self.cursor_y
       self.display_list.append(DisplayItem(x=x, y=y, text=word, font=font))
     max_descent = max([metric["descent"] for metric in metrics])
     self.cursor_y = baseline + 1.25 * max_descent
@@ -122,6 +139,13 @@ class Layout:
         for item in self.line:
           item.x += start_x
         self.flush()
+      elif token.tag == "sup":
+        self.size = int(self.size / 2)
+        self.is_sup = True
+      elif token.tag == "/sup":
+        self.size *= 2
+        self.is_sup = False
+
 
     self.flush()
     return self.display_list
