@@ -33,24 +33,18 @@ class LineItem:
   x: int
   text: str
   font: tkfont.Font
+  is_sup: bool
 
-  def __init__(self, x: int, text: str, font: tkfont.Font):
+  def __init__(self, x: int, text: str, font: tkfont.Font, is_sup: bool):
     self.x = x
     self.text = text
     self.font = font
+    self.is_sup = is_sup
 
   def __iter__(self):
     yield self.x
     yield self.text
     yield self.font
-  
-  @abstractmethod
-  def is_sup(self) -> bool:
-    return False
-
-class SupLineItem(LineItem):
-  def is_sup(self) -> bool:
-    return True
 
 DisplayList = List[DisplayItem]
 Line = List[LineItem]
@@ -67,10 +61,12 @@ class Layout:
     self.size: int = 12
     self.line: Line = []
     self.is_sup: bool = False
+    self.is_abbr: bool = False
+    self.abbr_buffer = ""
 
-  def handle_word(self, word: str):
+  def handle_word(self, word: str, trailing_character: str = character_set.SPACE):
     font = get_font(self.size, self.weight, self.style)
-    word_and_space_width = font.measure(word + character_set.SPACE)
+    word_and_space_width = font.measure(word + trailing_character)
     if self.cursor_x + word_and_space_width >= self.viewport_width:
       parts = word.split(character_set.SOFT_HYPHEN)
       if parts.__len__() > 1 and not self.is_sup:
@@ -91,20 +87,16 @@ class Layout:
           if part_index < len(parts):
             if candidate:
               item = LineItem(x=self.cursor_x, text=candidate + character_set.HYPHEN,
-                  font=font)
+                              font=font)
               self.line.append(item)
             self.flush()
           else:
             self.line.append(LineItem(x=self.cursor_x, text=candidate, font=font))
-            self.cursor_x += font.measure(candidate + character_set.SPACE)
+            self.cursor_x += font.measure(candidate + trailing_character)
             return
       else:
         self.flush()
-    item = None
-    if self.is_sup:
-      item = SupLineItem(x=self.cursor_x, text=word, font=font)
-    else:
-      item = LineItem(x=self.cursor_x, text=word, font=font)
+    item = LineItem(x=self.cursor_x, text=word, font=font, is_sup=self.is_sup)
     self.line.append(item)
     self.cursor_x += word_and_space_width
 
@@ -118,18 +110,57 @@ class Layout:
     for item in self.line:
       (x, word, font) = item
       ascent = font.metrics("ascent")
-      y = baseline - ascent if not item.is_sup() else self.cursor_y
+      y = baseline - ascent if not item.is_sup else self.cursor_y
       self.display_list.append(DisplayItem(x=x, y=y, text=word, font=font))
     max_descent = max([metric["descent"] for metric in metrics])
     self.cursor_y = baseline + 1.25 * max_descent
     self.cursor_x = HSTEP
     self.line = []
 
+  def handle_abbr(self):
+    text = (self.abbr_buffer or "").strip()
+    original_size = self.size
+    original_weight = self.weight
+    word_buffer = ""
+    is_prev_lower = None
+    for ch in text:
+      if ch.isspace():
+        self.handle_word(word_buffer)
+        word_buffer = ""
+      elif ch.isupper() or ch.isdigit():
+        if is_prev_lower is None or is_prev_lower:
+          self.handle_word(word_buffer.upper(), trailing_character="")
+          word_buffer = ""
+          self.size = original_size
+          self.weight = original_weight
+        is_prev_lower = False
+        word_buffer += ch
+      elif ch.islower():
+        if is_prev_lower is None or not is_prev_lower:
+          self.handle_word(word_buffer, trailing_character="")
+          word_buffer = ""
+          self.size -= 2
+          self.weight = "bold"
+        is_prev_lower = True
+        word_buffer += ch
+
+    if word_buffer:
+      self.handle_word(word_buffer.upper() if is_prev_lower else word_buffer)
+
+    # abbr 상태 해제
+    self.is_abbr = False
+    self.abbr_buffer = ""
+    self.size = original_size
+    self.weight = original_weight
+
   def layout(self) -> List[DisplayItem]:
     for token in self.tokens:
       if isinstance(token, Text):
-        for word in token.text.split():
-          self.handle_word(word=word)
+        if self.is_abbr:
+          self.abbr_buffer += token.text
+        else:
+          for word in token.text.split():
+            self.handle_word(word=word)
       # TODO: Fix the |view-source| feature
       elif token.tag == "i":
         self.style = "italic"
@@ -165,7 +196,11 @@ class Layout:
       elif token.tag == "/sup":
         self.size *= 2
         self.is_sup = False
-
+      elif token.tag == "abbr":
+        self.is_abbr = True
+        self.abbr_buffer = ""
+      elif token.tag == "/abbr":
+        self.handle_abbr()
 
     self.flush()
     return self.display_list
