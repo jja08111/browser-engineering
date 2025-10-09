@@ -1,7 +1,7 @@
 import tkinter
 from constant import HEIGHT, SCROLL_STEP, SCROLLBAR_PADDING, SCROLLBAR_WIDTH, WIDTH
-from layout import VSTEP, layout
-from lexer import lex
+from layout import VSTEP, Layout
+from lexer import Tokens, lex
 from url import URL
 
 class Browser:
@@ -18,6 +18,7 @@ class Browser:
     self.window.bind("<Down>", self.scrolldown)
     self.window.bind("<MouseWheel>", self.on_mouse_wheel)
     self.window.bind("<Configure>", self.on_configure)
+    self.tokens: Tokens = []
 
   def _content_max_y(self):
     return self.display_list[-1].y if self.display_list.__len__() else 0
@@ -72,23 +73,32 @@ class Browser:
   def draw_content(self):
     self.canvas.delete("all")
     height = self._window_height()
-    for x, y, c in self.display_list:
+    for x, y, text, font in self.display_list:
       if y > self.scroll + height or y + VSTEP < self.scroll:
         continue
-      self.canvas.create_text(x, y - self.scroll, text=c)
+      self.canvas.create_text(
+        x,
+        y - self.scroll,
+        text=text,
+        anchor=tkinter.NW,
+        font=font,
+      )
 
   def layout_and_draw(self):
-    self.display_list = layout(self.text, self._window_width())
+    self.display_list = Layout(
+      tokens=self.tokens,
+      window_width=self._window_width()
+    ).layout()
     self.draw_content()
     self.draw_scrollbar()
 
   def load(self, url: URL):
     try:
       body = url.request()
-      self.text = lex(body)
+      self.tokens = lex(body)
       self.layout_and_draw()
-    except:
-      print("Error")
+    except Exception as e:
+      print(f"Error: {e}")
 
 if __name__ == "__main__":
   import sys

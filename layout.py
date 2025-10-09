@@ -1,36 +1,114 @@
+import tkinter.font as tkfont 
 from typing import List
+from font_cache import get_font
+from font_weight import DEFAULT_WEIGHT, Weight
+from lexer import Text, Tokens
+from style import DEFAULT_STYLE, Style
 
 HSTEP, VSTEP = 13, 18
 NEWLINE_STEP = 24
+LEADING_RATIO = 1.25
 
 class DisplayItem:
   x: int
   y: int
-  c: str
+  text: str
+  font: tkfont.Font
 
-  def __init__(self, x: int, y: int, c: str):
+  def __init__(self, x: int, y: int, text: str, font: tkfont.Font):
     self.x = x
     self.y = y
-    self.c = c
+    self.text = text
+    self.font = font
   
   def __iter__(self):
     yield self.x
     yield self.y
-    yield self.c
+    yield self.text
+    yield self.font
 
-# TODO: Consider content view width because of scrollbar?
-def layout(text: str, width: int) -> List[DisplayItem]:
-  display_list: List[DisplayItem] = []
-  cursor_x, cursor_y = HSTEP, VSTEP
-  for c in text:
-    display_item = DisplayItem(x=cursor_x, y=cursor_y, c=c)
-    display_list.append(display_item)
-    cursor_x += HSTEP
-    if cursor_x >= width - HSTEP:
-      cursor_x = HSTEP
-      cursor_y += VSTEP
-    elif c == "\n":
-      cursor_x = HSTEP
-      cursor_y += NEWLINE_STEP
-  
-  return display_list
+class LineItem:
+  x: int
+  text: str
+  font: tkfont.Font
+
+  def __init__(self, x: int, text: str, font: tkfont.Font):
+    self.x = x
+    self.text = text
+    self.font = font
+
+  def __iter__(self):
+    yield self.x
+    yield self.text
+    yield self.font
+
+DisplayList = List[DisplayItem]
+Line = List[LineItem]
+
+class Layout:
+  def __init__(self, tokens: Tokens, window_width: int):
+    self.display_list: DisplayList = []
+    self.cursor_x: int = HSTEP
+    self.cursor_y: int = VSTEP
+    self.weight: Weight = DEFAULT_WEIGHT
+    self.style: Style = DEFAULT_STYLE
+    self.window_width: int = window_width
+    self.tokens: Tokens = tokens
+    self.size: int = 12
+    self.line: Line = []
+
+  def handle_word(self, word: str):
+    font = get_font(self.size, self.weight, self.style)
+    word_width = font.measure(word)
+    self.line.append(LineItem(x=self.cursor_x, text=word, font=font))
+    self.cursor_x += word_width + font.measure(" ")
+    if self.cursor_x + word_width >= self.window_width - HSTEP:
+      self.cursor_y += font.metrics("linespace") * 1.25
+      self.cursor_x = HSTEP
+      self.flush()
+
+  def flush(self):
+    if not self.line:
+      return
+    metrics = [font.metrics() for _, _, font in self.line]
+    max_ascent = max([metric["ascent"] for metric in metrics])
+    # TODO: This is a simple implementation. We need to consider variant fonts.
+    baseline = self.cursor_y + LEADING_RATIO * max_ascent
+    for x, word, font in self.line:
+      y = baseline - font.metrics("ascent")
+      self.display_list.append(DisplayItem(x=x, y=y, text=word, font=font))
+    max_descent = max([metric["descent"] for metric in metrics])
+    self.cursor_y = baseline + 1.25 * max_descent
+    self.cursor_x = HSTEP
+    self.line = []
+
+  # TODO: Consider content view width because of scrollbar?
+  def layout(self) -> List[DisplayItem]:
+    for token in self.tokens:
+      if isinstance(token, Text):
+        for word in token.text.split():
+          self.handle_word(word=word)
+      elif token.tag == "i":
+        self.style = "italic"
+      elif token.tag == "/i":
+        self.style = DEFAULT_STYLE
+      elif token.tag == "b":
+        self.weight = "bold"
+      elif token.tag == "/b":
+        self.weight = DEFAULT_WEIGHT 
+      elif token.tag == "small":
+        self.size -= 2
+      elif token.tag == "/small":
+        self.size += 2
+      elif token.tag == "big":
+        self.size += 4
+      elif token.tag == "/big":
+        self.size -= 4
+      elif token.tag == "br":
+        self.flush()
+      elif token.tag == "/p":
+        self.flush()
+        self.cursor_y += VSTEP
+
+    self.flush()
+    return self.display_list
