@@ -63,9 +63,10 @@ class Layout:
     self.is_sup: bool = False
     self.is_abbr: bool = False
     self.abbr_buffer = ""
+    self.is_pre: bool = False
 
   def handle_word(self, word: str, trailing_character: str = character_set.SPACE):
-    font = get_font(self.size, self.weight, self.style)
+    font = get_font(self.size, self.weight, self.style, family="Courier New" if self.is_pre else None)
     word_and_space_width = font.measure(word + trailing_character)
     if self.cursor_x + word_and_space_width >= self.viewport_width:
       parts = word.split(character_set.SOFT_HYPHEN)
@@ -158,6 +159,12 @@ class Layout:
       if isinstance(token, Text):
         if self.is_abbr:
           self.abbr_buffer += token.text
+        elif self.is_pre:
+          splitted = token.text.split("\n")
+          for index, line in enumerate(splitted):
+            self.handle_word(word=line)
+            if index + 1 < len(splitted):
+              self.flush()
         else:
           for word in token.text.split():
             self.handle_word(word=word)
@@ -201,6 +208,11 @@ class Layout:
         self.abbr_buffer = ""
       elif token.tag == "/abbr":
         self.handle_abbr()
+      elif token.tag == "pre":
+        self.is_pre = True
+      elif token.tag == "/pre":
+        self.is_pre = False
+        self.flush()
 
     self.flush()
     return self.display_list
