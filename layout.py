@@ -35,7 +35,8 @@ class LineItem:
   font: tkfont.Font
   is_sup: bool
 
-  def __init__(self, x: int, text: str, font: tkfont.Font, is_sup: bool):
+  def __init__(self, x: int, text: str, font: tkfont.Font,
+               is_sup: bool = False):
     self.x = x
     self.text = text
     self.font = font
