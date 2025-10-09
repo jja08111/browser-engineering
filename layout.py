@@ -88,6 +88,7 @@ class Layout:
       if isinstance(token, Text):
         for word in token.text.split():
           self.handle_word(word=word)
+      # TODO: Fix the |view-source| feature
       elif token.tag == "i":
         self.style = "italic"
       elif token.tag == "/i":
@@ -109,6 +110,13 @@ class Layout:
       elif token.tag == "/p":
         self.flush()
         self.cursor_y += VSTEP
+      elif token.tag == "/h1":
+        line_len = self.line.__len__()
+        line_width = (self.cursor_x - self.line[0].x) if line_len else 0
+        start_x = (self.window_width - line_width) / 2
+        for item in self.line:
+          item.x += start_x
+        self.flush()
 
     self.flush()
     return self.display_list
