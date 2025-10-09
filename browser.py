@@ -53,7 +53,7 @@ class Browser:
   def _viewport_width(self) -> int:
     if self._should_draw_scrollbar():
       return self._window_width() - SCROLLBAR_BOX_WIDHT
-    return self._window_width()  
+    return self._window_width()
 
   def scrollup(self, _):
     self._scroll_internal(-SCROLL_STEP)

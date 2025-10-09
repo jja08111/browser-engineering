@@ -70,9 +70,36 @@ class Layout:
 
   def handle_word(self, word: str):
     font = get_font(self.size, self.weight, self.style)
-    word_and_space_width = font.measure(word) + font.measure(character_set.SPACE)
+    word_and_space_width = font.measure(word + character_set.SPACE)
     if self.cursor_x + word_and_space_width >= self.viewport_width:
-      self.flush()
+      parts = word.split(character_set.SOFT_HYPHEN)
+      if parts.__len__() > 1 and not self.is_sup:
+        part_index = 0
+        while True:
+          candidate = ""
+          while part_index < len(parts):
+            if (self.cursor_x + font.measure(candidate + parts[part_index] + character_set.HYPHEN)
+                    >= self.viewport_width):
+              break
+            candidate += parts[part_index]
+            part_index += 1
+          if not candidate and self.cursor_x == HSTEP:
+            self.line.append(LineItem(x=self.cursor_x, text=word, font=font))
+            self.flush()
+            return
+
+          if part_index < len(parts):
+            if candidate:
+              item = LineItem(x=self.cursor_x, text=candidate + character_set.HYPHEN,
+                  font=font)
+              self.line.append(item)
+            self.flush()
+          else:
+            self.line.append(LineItem(x=self.cursor_x, text=candidate, font=font))
+            self.cursor_x += font.measure(candidate + character_set.SPACE)
+            return
+      else:
+        self.flush()
     item = None
     if self.is_sup:
       item = SupLineItem(x=self.cursor_x, text=word, font=font)
