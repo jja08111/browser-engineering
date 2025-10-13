@@ -1,7 +1,7 @@
 import tkinter
 from constant import HEIGHT, SCROLL_STEP, SCROLLBAR_PADDING, SCROLLBAR_WIDTH, WIDTH
 from layout import HSTEP, VSTEP, DisplayList, Layout
-from lexer import Tokens, lex
+from parser import HTMLParser, Nodes, Element, print_tree
 from url import URL
 
 SCROLLBAR_BOX_WIDHT = SCROLLBAR_WIDTH + 2 * SCROLLBAR_PADDING
@@ -20,7 +20,7 @@ class Browser:
     self.window.bind("<Down>", self.scrolldown)
     self.window.bind("<MouseWheel>", self.on_mouse_wheel)
     self.window.bind("<Configure>", self.on_configure)
-    self.tokens: Tokens = []
+    self.root: Element = None
     self.display_list: DisplayList = []
 
   def _content_max_y(self):
@@ -98,17 +98,19 @@ class Browser:
       )
 
   def layout_and_draw(self):
-    self.display_list = Layout(
-      tokens=self.tokens,
-      viewport_width=self._viewport_width()
-    ).layout()
+    viewport_width = self._viewport_width()
+    if viewport_width < 0:
+      return
+    layout = Layout(viewport_width=viewport_width)
+    self.display_list = layout.layout(self.root)
     self.draw_content()
     self.draw_scrollbar()
 
   def load(self, url: URL):
     try:
       body = url.request()
-      self.tokens = lex(body)
+      self.root = HTMLParser(body=body).parse()
+      print_tree(self.root)
       self.layout_and_draw()
     except Exception as e:
       print(f"Error: {e}")
