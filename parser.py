@@ -34,11 +34,13 @@ class HTMLParser:
     "base", "basefont", "bgsound", "noscript",
     "link", "meta", "title", "style", "script"
   ]
+  BLOCK_TAGS = ["p", "li"]
+  LIST_OWNER_TAGS = ["ol", "ul"]
 
   def __init__(self, body: Body) -> None:
     self.body = body
     self.unfinished: List[Element] = []
-  
+
   def get_attributes(self, text: str) -> Tuple[str, Attributes]:
     parts = text.split()
     tag = parts[0].casefold()
@@ -79,6 +81,13 @@ class HTMLParser:
     node = Text(text, parent)
     parent.children.append(node)
   
+  def handle_close_tag(self):
+    if len(self.unfinished) == 1:
+      return
+    node = self.unfinished.pop()
+    parent = self.unfinished[-1]
+    parent.children.append(node)
+  
   def add_tag(self, tag: str):
     tag, attributes = self.get_attributes(tag)
     self.add_implicit_tags(tag)
@@ -88,13 +97,12 @@ class HTMLParser:
       parent.children.append(node)
 
     if tag.startswith("/"):
-      if len(self.unfinished) == 1:
-        return
-      node = self.unfinished.pop()
-      parent = self.unfinished[-1]
-      parent.children.append(node)
+      self.handle_close_tag()
     else:
       parent = self.unfinished[-1] if self.unfinished else None
+      if parent and parent.tag in self.BLOCK_TAGS and \
+         (tag in self.BLOCK_TAGS or tag in self.LIST_OWNER_TAGS):
+        self.handle_close_tag()
       node = Element(tag, attributes, parent)
       self.unfinished.append(node)
 

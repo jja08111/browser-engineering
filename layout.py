@@ -189,6 +189,8 @@ class Layout:
     elif tag == "p":
       self.flush()
       self.cursor_y += VSTEP
+    elif tag == "li":
+      self.flush()
     elif tag == "h1":
       line_len = self.line.__len__()
       line_width = (self.cursor_x - self.line[0].x) if line_len else 0
