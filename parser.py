@@ -95,6 +95,7 @@ class HTMLParser:
       parent = self.unfinished[-1]
       node = Element(tag, attributes, parent)
       parent.children.append(node)
+      return
 
     if tag.startswith("/"):
       self.handle_close_tag()
@@ -122,6 +123,7 @@ class HTMLParser:
     in_tag = False
     in_comment = False
     in_script = False
+    in_attribute = False
     index = 0
     content = self.body.content
     text = ""
@@ -143,13 +145,15 @@ class HTMLParser:
         if text:
           self.add_text(text)
         text = ""
-      elif c == ">" and in_tag:
+      elif c == ">" and in_tag and not in_attribute:
         in_tag = False
         if text.startswith("script"):
           in_script = True
         else:
           self.add_tag(text)
         text = ""
+      elif c == "\"" and in_tag:
+        in_attribute = not in_attribute
       elif content.startswith("&lt;", index):
         self.add_text("<")
         index += 3
