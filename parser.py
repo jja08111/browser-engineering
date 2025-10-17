@@ -121,12 +121,18 @@ class HTMLParser:
 
     in_tag = False
     in_comment = False
+    in_script = False
     index = 0
     content = self.body.content
     text = ""
     while (index < content.__len__()):
       c = content[index]
-      if in_tag and in_comment:
+      if in_script:
+        text += c
+        if text.endswith("</script>"):
+          text = ""
+          in_script = False
+      elif in_tag and in_comment:
         text += c
         if c == "\n" or text.endswith("-->"):
           text = ""
@@ -139,7 +145,10 @@ class HTMLParser:
         text = ""
       elif c == ">" and in_tag:
         in_tag = False
-        self.add_tag(text)
+        if text.startswith("script"):
+          in_script = True
+        else:
+          self.add_tag(text)
         text = ""
       elif content.startswith("&lt;", index):
         self.add_text("<")
