@@ -125,7 +125,7 @@ class HTMLParser:
     text = ""
     while (index < content.__len__()):
       c = content[index]
-      if text.startswith("!--"):
+      if in_tag and text.startswith("!--"):
         if c == "\n" or (text.endswith("--") and c == ">"):
           text = ""
           in_tag = False
