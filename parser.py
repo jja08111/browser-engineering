@@ -1,4 +1,4 @@
-from typing import List, Mapping, Tuple
+from typing import List, Tuple
 from body import Body
 
 class Text:
@@ -81,8 +81,6 @@ class HTMLParser:
   
   def add_tag(self, tag: str):
     tag, attributes = self.get_attributes(tag)
-    if tag.startswith("!"):
-      return
     self.add_implicit_tags(tag)
     if tag in self.SELF_CLOSING_TAGS:
       parent = self.unfinished[-1]
@@ -119,12 +117,18 @@ class HTMLParser:
     text = ""
     while (index < content.__len__()):
       c = content[index]
-      if c == "<":
+      if text.startswith("!--"):
+        if c == "\n" or (text.endswith("--") and c == ">"):
+          text = ""
+          in_tag = False
+        else:
+          text += c
+      elif c == "<" and not in_tag:
         in_tag = True
         if text:
           self.add_text(text)
         text = ""
-      elif c == ">":
+      elif c == ">" and in_tag:
         in_tag = False
         self.add_tag(text)
         text = ""
