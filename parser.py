@@ -120,17 +120,18 @@ class HTMLParser:
       return self.body.content
 
     in_tag = False
+    in_comment = False
     index = 0
     content = self.body.content
     text = ""
     while (index < content.__len__()):
       c = content[index]
-      if in_tag and text.startswith("!--"):
-        if c == "\n" or (text.endswith("--") and c == ">"):
+      if in_tag and in_comment:
+        text += c
+        if c == "\n" or text.endswith("-->"):
           text = ""
           in_tag = False
-        else:
-          text += c
+          in_comment = False
       elif c == "<" and not in_tag:
         in_tag = True
         if text:
@@ -148,6 +149,8 @@ class HTMLParser:
         index += 3
       else:
         text += c
+        if text == "!--":
+          in_comment = True
       
       index += 1
     if not in_tag and text:
