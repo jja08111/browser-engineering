@@ -53,8 +53,12 @@ class LineItem:
 DisplayList = List[DisplayItem]
 Line = List[LineItem]
 
-class Layout:
-  def __init__(self, viewport_width: int):
+class BlockLayout:
+  def __init__(self, viewport_width: int, node: Node, parent: Node, previous: Node):
+    self.node: Node = node
+    self.parent: Node = parent
+    self.previous: Node = previous
+    self.children: list[Node] = []
     self.display_list: DisplayList = []
     self.cursor_x: int = HSTEP
     self.cursor_y: int = VSTEP
@@ -227,7 +231,24 @@ class Layout:
         self.recurse(child)
       self.handle_close_tag(root.tag)
   
-  def layout(self, root: Node) -> DisplayList:
-    self.recurse(root=root)
+  def layout(self) -> DisplayList:
+    self.recurse(root=self.node)
     self.flush()
     return self.display_list
+
+class DocumentLayout:
+  def __init__(self, viewport_width: int, node: Node):
+    self.viewport_width = viewport_width
+    self.node = node
+    self.parent = None
+    self.children = []
+
+  def layout(self) -> DisplayList:
+    child = BlockLayout(
+      viewport_width=self.viewport_width,
+      node=self.node,
+      parent=self,
+      previous=None,
+    )
+    self.children.append(child)
+    return child.layout()
