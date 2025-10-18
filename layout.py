@@ -205,6 +205,7 @@ class Layout:
       self.handle_abbr()
     elif tag == "pre":
       self.is_pre = False
+      # TODO: Is it right to flush in here?
       self.flush()
 
   def recurse(self, root: Node):

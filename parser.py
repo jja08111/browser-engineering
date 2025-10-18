@@ -36,6 +36,7 @@ class HTMLParser:
   ]
   BLOCK_TAGS = ["p", "li"]
   LIST_OWNER_TAGS = ["ol", "ul"]
+  TEXT_FORMATTING_TAGS = ["b", "i"]
 
   def __init__(self, body: Body) -> None:
     self.body = body
@@ -81,7 +82,7 @@ class HTMLParser:
     node = Text(text, parent)
     parent.children.append(node)
   
-  def handle_close_tag(self):
+  def close_unfinished_tag(self):
     if len(self.unfinished) == 1:
       return
     node = self.unfinished.pop()
@@ -100,12 +101,19 @@ class HTMLParser:
       return
 
     if tag.startswith("/"):
-      self.handle_close_tag()
+      parent_tag = self.unfinished[-1].tag if self.unfinished else None
+      if parent_tag in self.TEXT_FORMATTING_TAGS \
+         and parent_tag != tag.split("/")[1]:
+        self.close_unfinished_tag()
+        self.close_unfinished_tag()
+        self.add_tag(parent_tag)
+      else:
+        self.close_unfinished_tag()
     else:
       parent = self.unfinished[-1] if self.unfinished else None
       if parent and parent.tag in self.BLOCK_TAGS and \
          (tag in self.BLOCK_TAGS or tag in self.LIST_OWNER_TAGS):
-        self.handle_close_tag()
+        self.close_unfinished_tag()
       node = Element(tag, attributes, parent)
       self.unfinished.append(node)
 
