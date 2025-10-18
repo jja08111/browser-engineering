@@ -1,7 +1,7 @@
 import tkinter
 from constant import HEIGHT, SCROLL_STEP, SCROLLBAR_PADDING, SCROLLBAR_WIDTH, WIDTH
 from layout import HSTEP, VSTEP, DisplayList, Layout
-from parser import HTMLParser, Nodes, Element, print_tree
+from parser import HTMLParser, Nodes, Element, create_html_parser, print_tree
 from url import URL
 
 SCROLLBAR_BOX_WIDHT = SCROLLBAR_WIDTH + 2 * SCROLLBAR_PADDING
@@ -109,7 +109,7 @@ class Browser:
   def load(self, url: URL):
     try:
       body = url.request()
-      self.root = HTMLParser(body=body).parse()
+      self.root = create_html_parser(body=body).parse()
       print_tree(self.root)
       self.layout_and_draw()
     except Exception as e:

@@ -89,6 +89,8 @@ class HTMLParser:
     parent.children.append(node)
   
   def add_tag(self, tag: str):
+    if tag.startswith("!"):
+      return
     tag, attributes = self.get_attributes(tag)
     self.add_implicit_tags(tag)
     if tag in self.SELF_CLOSING_TAGS:
@@ -117,9 +119,6 @@ class HTMLParser:
     return self.unfinished.pop()
 
   def parse(self) -> Node:
-    if (self.body.is_view_source):
-      return self.body.content
-
     in_tag = False
     in_comment = False
     in_script = False
@@ -169,6 +168,30 @@ class HTMLParser:
     if not in_tag and text:
       self.add_text(text)
     return self.finish()
+
+class ViewSourceHTMLParser(HTMLParser):
+  def add_text(self, text: str):
+    super().add_tag("pre")
+    super().add_tag("b")
+    super().add_text(text)
+    super().add_tag("/b")
+    super().add_tag("/pre")
+
+  def add_tag(self, tag: str):
+    if tag.startswith("/"):
+      super().add_text(f"<{tag}>")
+    else:
+      super().add_text(f"<{tag}>")
+  
+  def parse(self) -> Node:
+    super().add_tag("html")
+    super().add_tag("body")
+    return super().parse()
+
+def create_html_parser(body: Body) -> HTMLParser:
+  if body.is_view_source:
+    return ViewSourceHTMLParser(body)
+  return HTMLParser(body)
 
 def print_tree(node: Node, indent=0):
   print(" " * indent, node)
