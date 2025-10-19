@@ -117,8 +117,11 @@ class BlockLayout:
     self.width: int | None = None
     self.height: int | None = None
 
+  def get_font(self) -> tkfont.Font:
+    return get_font(self.size, self.weight, self.style, family="Courier New" if self.is_pre else None)
+
   def handle_word(self, word: str, trailing_character: str = character_set.SPACE):
-    font = get_font(self.size, self.weight, self.style, family="Courier New" if self.is_pre else None)
+    font = self.get_font()
     word_and_space_width = font.measure(word + trailing_character)
     if self.cursor_x + word_and_space_width >= self.width:
       parts = word.split(character_set.SOFT_HYPHEN)
@@ -302,7 +305,7 @@ class BlockLayout:
       for child in self.node.children:
         if isinstance(child, Element) and child.tag == "head":
           continue
-        next = BlockLayout(node=child, parent=self, previous=previous)
+        next = create_layout_object(node=child, parent=self, previous=previous)
         self.children.append(next)
         previous = next
     else:
@@ -324,7 +327,7 @@ class BlockLayout:
 
     for child in self.children:
       child.layout()
-    
+
     if mode == LayoutMode.BLOCK:
       self.height = sum([
           child.height for child in self.children])
@@ -344,6 +347,21 @@ class BlockLayout:
   def __repr__(self) -> str:
     return f"BlockLayout: {self.node}"
 
+class ListItemLayout(BlockLayout):
+  MARKER_SYMBOL = "•"
+
+  def paint(self) -> Commands:
+    font = self.get_font()
+    marker_width = font.measure(f"{self.MARKER_SYMBOL} ")
+    text = DrawText(x1=self.x, y1=self.y, text=self.MARKER_SYMBOL, font=font)
+    commands: Commands = [text]
+    for x, y, word, font in self.display_list:
+      commands.append(DrawText(x1=marker_width + x, y1=y, text=word, font=font))
+    return commands
+
+  def __repr__(self) -> str:
+    return f"ListLayout: {self.node}"
+
 class DocumentLayout:
   def __init__(self, viewport_width: int, node: Node):
     self.viewport_width: int = viewport_width
@@ -356,11 +374,7 @@ class DocumentLayout:
     self.height: int | None = None
 
   def layout(self):
-    child = BlockLayout(
-      node=self.node,
-      parent=self,
-      previous=None,
-    )
+    child = create_layout_object(node=self.node, parent=self, previous=None)
     self.children.append(child)
     self.width = self.viewport_width - 2 * HSTEP
     self.x = HSTEP
@@ -380,3 +394,8 @@ def paint_tree(layout_object: DocumentLayout | BlockLayout,
 
   for child in layout_object.children:
     paint_tree(child, commands)
+
+def create_layout_object(node: Node, parent: BlockLayout | DocumentLayout, previous: BlockLayout):
+  if isinstance(node, Element) and node.tag == "li":
+    return ListItemLayout(node=node, parent=parent, previous=previous)
+  return BlockLayout(node=node, parent=parent, previous=previous)
