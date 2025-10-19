@@ -21,7 +21,7 @@ class Browser:
     self.window.bind("<MouseWheel>", self.on_mouse_wheel)
     self.window.bind("<Configure>", self.on_configure)
     self.root: Element = None
-    self.display_list: Commands = []
+    self.commands: Commands = []
 
   def _content_max_y(self):
     if not hasattr(self, "document"):
@@ -88,7 +88,7 @@ class Browser:
   def draw_content(self):
     self.canvas.delete("all")
     height = self._window_height()
-    for command in self.display_list:
+    for command in self.commands:
       if command.top > self.scroll + height:
         continue
       if command.bottom < self.scroll:
@@ -99,13 +99,13 @@ class Browser:
     viewport_width = self._viewport_width()
     if viewport_width < 0:
       return
-    self.display_list = []
+    self.commands = []
     self.document = DocumentLayout(
       viewport_width=viewport_width,
       node=self.root,
     )
     self.document.layout()
-    paint_tree(self.document, self.display_list)
+    paint_tree(self.document, self.commands)
     self.draw_content()
     self.draw_scrollbar()
 
