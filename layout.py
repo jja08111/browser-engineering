@@ -4,12 +4,26 @@ from typing import List
 import character_set
 from font_cache import get_font
 from font_weight import DEFAULT_WEIGHT, Weight
-from parser import Text, Nodes, Node
+from parser import Element, Text, Node
 from style import DEFAULT_STYLE, Style
+from enum import Enum
 
 HSTEP, VSTEP = 13, 18
 NEWLINE_STEP = 24
 LEADING_RATIO = 1.25
+
+BLOCK_ELEMENTS = [
+  "html", "body", "article", "section", "nav", "aside",
+  "h1", "h2", "h3", "h4", "h5", "h6", "hgroup", "header",
+  "footer", "address", "p", "hr", "pre", "blockquote",
+  "ol", "ul", "menu", "li", "dl", "dt", "dd", "figure",
+  "figcaption", "main", "div", "table", "form", "fieldset",
+  "legend", "details", "summary"
+]
+
+class LayoutMode(Enum):
+    INLINE = 1
+    BLOCK = 2
 
 class DisplayItem:
   x: int
@@ -30,7 +44,7 @@ class DisplayItem:
     yield self.font
   
   def __repr__(self) -> str:
-    return f"x: {self.x}, y: {self.y}, text: {self.text}, font: {self.font}"
+    return f"[x: {self.x}, y: {self.y}, text: {self.text}, font: {self.font}]"
 
 class LineItem:
   x: int
@@ -54,28 +68,23 @@ DisplayList = List[DisplayItem]
 Line = List[LineItem]
 
 class BlockLayout:
-  def __init__(self, viewport_width: int, node: Node, parent: Node, previous: Node):
-    self.node: Node = node
-    self.parent: Node = parent
-    self.previous: Node = previous
-    self.children: list[Node] = []
+  def __init__(self, node: Node, parent, previous):
+    assert(isinstance(parent, (BlockLayout, DocumentLayout)))
+    assert(isinstance(previous, BlockLayout) or previous is None)
     self.display_list: DisplayList = []
-    self.cursor_x: int = HSTEP
-    self.cursor_y: int = VSTEP
-    self.weight: Weight = DEFAULT_WEIGHT
-    self.style: Style = DEFAULT_STYLE
-    self.viewport_width: int = viewport_width
-    self.size: int = 12
-    self.line: Line = []
-    self.is_sup: bool = False
-    self.is_abbr: bool = False
-    self.abbr_buffer = ""
-    self.is_pre: bool = False
+    self.node: Node = node
+    self.parent: BlockLayout | DocumentLayout = parent
+    self.previous: BlockLayout | None = previous
+    self.children: list[BlockLayout] = []
+    self.x: int | None = None
+    self.y: int | None = None
+    self.width: int | None = None
+    self.height: int | None = None
 
   def handle_word(self, word: str, trailing_character: str = character_set.SPACE):
     font = get_font(self.size, self.weight, self.style, family="Courier New" if self.is_pre else None)
     word_and_space_width = font.measure(word + trailing_character)
-    if self.cursor_x + word_and_space_width >= self.viewport_width:
+    if self.cursor_x + word_and_space_width >= self.width:
       parts = word.split(character_set.SOFT_HYPHEN)
       if parts.__len__() > 1 and not self.is_sup:
         part_index = 0
@@ -83,11 +92,12 @@ class BlockLayout:
           candidate = ""
           while part_index < len(parts):
             if (self.cursor_x + font.measure(candidate + parts[part_index] + character_set.HYPHEN)
-                    >= self.viewport_width):
+                    >= self.width):
               break
             candidate += parts[part_index]
             part_index += 1
-          if not candidate and self.cursor_x == HSTEP:
+          # TODO: We should check here. The `0` is right to compare?
+          if not candidate and self.cursor_x == 0:
             self.line.append(LineItem(x=self.cursor_x, text=word, font=font))
             self.flush()
             return
@@ -116,13 +126,13 @@ class BlockLayout:
     # TODO: This is a simple implementation. We need to consider variant fonts.
     baseline = self.cursor_y + LEADING_RATIO * max_ascent
     for item in self.line:
-      (x, word, font) = item
-      ascent = font.metrics("ascent")
-      y = baseline - ascent if not item.is_sup else self.cursor_y
+      (rel_x, word, font) = item
+      x = self.x + rel_x
+      y = self.y + (baseline - font.metrics("ascent") if not item.is_sup else self.cursor_y)
       self.display_list.append(DisplayItem(x=x, y=y, text=word, font=font))
     max_descent = max([metric["descent"] for metric in metrics])
     self.cursor_y = baseline + 1.25 * max_descent
-    self.cursor_x = HSTEP
+    self.cursor_x = 0
     self.line = []
 
   def handle_abbr(self):
@@ -198,7 +208,7 @@ class BlockLayout:
     elif tag == "h1":
       line_len = self.line.__len__()
       line_width = (self.cursor_x - self.line[0].x) if line_len else 0
-      start_x = (self.viewport_width - line_width) / 2
+      start_x = (self.width - line_width) / 2
       for item in self.line:
         item.x += start_x
       self.flush()
@@ -230,25 +240,83 @@ class BlockLayout:
       for child in root.children:
         self.recurse(child)
       self.handle_close_tag(root.tag)
+
+  def layout_mode(self) -> LayoutMode:
+    if isinstance(self.node, Text):
+      return LayoutMode.INLINE
+    elif any([isinstance(child, Element) and \
+              child.tag in BLOCK_ELEMENTS \
+              for child in self.node.children]):
+      return LayoutMode.BLOCK
+    elif self.node.children:
+      return LayoutMode.INLINE
+    else:
+      return LayoutMode.BLOCK
+
+  def layout(self):
+    self.x = self.parent.x
+    self.width = self.parent.width
+    if self.previous:
+      self.y = self.previous.y + self.previous.height
+    else:
+      self.y = self.parent.y
+    mode = self.layout_mode()
+    if mode == LayoutMode.BLOCK:
+      previous: BlockLayout | None = None
+      for child in self.node.children:
+        next = BlockLayout(node=child, parent=self, previous=previous)
+        self.children.append(next)
+        previous = next
+    else:
+      self.cursor_x: int = 0
+      self.cursor_y: int = 0
+      self.weight: Weight = DEFAULT_WEIGHT
+      self.style: Style = DEFAULT_STYLE
+      self.size: int = 12
+      self.is_sup: bool = False
+      self.is_abbr: bool = False
+      self.abbr_buffer = ""
+      self.is_pre: bool = False
+
+      self.line: Line = []
+      self.recurse(root=self.node)
+      self.flush()
+
+      self.height = self.cursor_y
+    
+    for child in self.children:
+      child.layout()
+    
+    if mode == LayoutMode.BLOCK:
+      self.height = sum([
+          child.height for child in self.children])
   
-  def layout(self) -> DisplayList:
-    self.recurse(root=self.node)
-    self.flush()
+  def paint(self):
     return self.display_list
 
 class DocumentLayout:
   def __init__(self, viewport_width: int, node: Node):
-    self.viewport_width = viewport_width
-    self.node = node
-    self.parent = None
-    self.children = []
+    self.viewport_width: int = viewport_width
+    self.node: Node = node
+    self.parent: None = None
+    self.children: list[BlockLayout] = []
+    self.x: int | None = None
+    self.y: int | None = None
+    self.width: int | None = None
+    self.height: int | None = None
 
-  def layout(self) -> DisplayList:
+  def layout(self):
     child = BlockLayout(
-      viewport_width=self.viewport_width,
       node=self.node,
       parent=self,
       previous=None,
     )
     self.children.append(child)
-    return child.layout()
+    self.width = self.viewport_width - 2 * HSTEP
+    self.x = HSTEP
+    self.y = VSTEP
+    child.layout()
+    self.height = child.height
+
+  def paint(self):
+    return []

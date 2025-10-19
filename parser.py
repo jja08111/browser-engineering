@@ -200,8 +200,3 @@ def create_html_parser(body: Body) -> HTMLParser:
   if body.is_view_source:
     return ViewSourceHTMLParser(body)
   return HTMLParser(body)
-
-def print_tree(node: Node, indent=0):
-  print(" " * indent, node)
-  for child in node.children:
-    print_tree(child, indent + 2)

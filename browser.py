@@ -1,7 +1,9 @@
 import tkinter
 from constant import HEIGHT, SCROLL_STEP, SCROLLBAR_PADDING, SCROLLBAR_WIDTH, WIDTH
-from layout import HSTEP, VSTEP, DisplayList, DocumentLayout
-from parser import Element, create_html_parser, print_tree
+from layout import VSTEP, DisplayList, DocumentLayout
+from logger import print_tree
+from painter import paint_tree
+from parser import Element, create_html_parser
 from url import URL
 
 SCROLLBAR_BOX_WIDHT = SCROLLBAR_WIDTH + 2 * SCROLLBAR_PADDING
@@ -101,11 +103,13 @@ class Browser:
     viewport_width = self._viewport_width()
     if viewport_width < 0:
       return
+    self.display_list = []
     self.document = DocumentLayout(
       viewport_width=viewport_width,
       node=self.root,
     )
-    self.display_list = self.document.layout()
+    self.document.layout()
+    paint_tree(self.document, self.display_list)
     self.draw_content()
     self.draw_scrollbar()
 
@@ -113,7 +117,6 @@ class Browser:
     try:
       body = url.request()
       self.root = create_html_parser(body=body).parse()
-      print_tree(self.root)
       self.layout_and_draw()
     except Exception as e:
       print(f"Error: {e}")
