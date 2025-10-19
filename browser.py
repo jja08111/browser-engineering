@@ -1,6 +1,7 @@
 import tkinter
 from constant import HEIGHT, SCROLL_STEP, SCROLLBAR_PADDING, SCROLLBAR_WIDTH, WIDTH
 from layout import VSTEP, Commands, DocumentLayout, paint_tree
+from logger import print_tree
 from parser import Element, create_html_parser
 from url import URL
 
@@ -24,7 +25,7 @@ class Browser:
     self.commands: Commands = []
 
   def _content_max_y(self):
-    if not hasattr(self, "document"):
+    if not hasattr(self, "document") or self.document.height is None:
       return 0
     return max(self.document.height + 2 * VSTEP, 0)
 
@@ -105,6 +106,7 @@ class Browser:
       node=self.root,
     )
     self.document.layout()
+    print_tree(self.document)
     paint_tree(self.document, self.commands)
     self.draw_content()
     self.draw_scrollbar()

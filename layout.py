@@ -300,6 +300,8 @@ class BlockLayout:
     if mode == LayoutMode.BLOCK:
       previous: BlockLayout | None = None
       for child in self.node.children:
+        if isinstance(child, Element) and child.tag == "head":
+          continue
         next = BlockLayout(node=child, parent=self, previous=previous)
         self.children.append(next)
         previous = next
@@ -319,7 +321,7 @@ class BlockLayout:
       self.flush()
 
       self.height = self.cursor_y
-    
+
     for child in self.children:
       child.layout()
     
@@ -338,6 +340,9 @@ class BlockLayout:
       for x, y, word, font in self.display_list:
         commands.append(DrawText(x1=x, y1=y, text=word, font=font))
     return commands
+
+  def __repr__(self) -> str:
+    return f"BlockLayout: {self.node}"
 
 class DocumentLayout:
   def __init__(self, viewport_width: int, node: Node):
@@ -365,6 +370,9 @@ class DocumentLayout:
 
   def paint(self) -> Commands:
     return []
+
+  def __repr__(self) -> str:
+    return f"DocumentLayout: {self.node}"
 
 def paint_tree(layout_object: DocumentLayout | BlockLayout,
                commands: Commands):
