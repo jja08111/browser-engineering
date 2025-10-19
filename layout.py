@@ -329,6 +329,11 @@ class BlockLayout:
   
   def paint(self) -> Commands:
     commands: Commands = []
+    if isinstance(self.node, Element) and self.node.tag == "nav" and \
+       "class" in self.node.attributes.keys() and self.node.attributes["class"] == "links":
+      commands.append(
+          DrawRect(x1=self.x, y1=self.y, x2=self.x + self.width, y2=self.y + self.height,
+                   color="gray"))
     if self.layout_mode() == LayoutMode.INLINE:
       for x, y, word, font in self.display_list:
         commands.append(DrawText(x1=x, y1=y, text=word, font=font))
