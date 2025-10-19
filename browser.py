@@ -1,8 +1,6 @@
 import tkinter
 from constant import HEIGHT, SCROLL_STEP, SCROLLBAR_PADDING, SCROLLBAR_WIDTH, WIDTH
-from layout import VSTEP, DisplayList, DocumentLayout
-from logger import print_tree
-from painter import paint_tree
+from layout import VSTEP, Commands, DocumentLayout, paint_tree
 from parser import Element, create_html_parser
 from url import URL
 
@@ -23,10 +21,12 @@ class Browser:
     self.window.bind("<MouseWheel>", self.on_mouse_wheel)
     self.window.bind("<Configure>", self.on_configure)
     self.root: Element = None
-    self.display_list: DisplayList = []
+    self.display_list: Commands = []
 
   def _content_max_y(self):
-    return self.display_list[-1].y if self.display_list.__len__() else 0
+    if not hasattr(self, "document"):
+      return 0
+    return max(self.document.height + 2 * VSTEP, 0)
 
   def _scroll_internal(self, delta: float):
     self.scroll -= delta
@@ -88,16 +88,12 @@ class Browser:
   def draw_content(self):
     self.canvas.delete("all")
     height = self._window_height()
-    for x, y, text, font in self.display_list:
-      if y > self.scroll + height or y + VSTEP < self.scroll:
+    for command in self.display_list:
+      if command.top > self.scroll + height:
         continue
-      self.canvas.create_text(
-        x,
-        y - self.scroll,
-        text=text,
-        anchor=tkinter.NW,
-        font=font,
-      )
+      if command.bottom < self.scroll:
+        continue
+      command.execute(self.scroll, self.canvas)
 
   def layout_and_draw(self):
     viewport_width = self._viewport_width()

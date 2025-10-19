@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from tkinter import Canvas
 import tkinter.font as tkfont 
 from typing import List
 import character_set
@@ -24,6 +25,41 @@ BLOCK_ELEMENTS = [
 class LayoutMode(Enum):
     INLINE = 1
     BLOCK = 2
+
+class DrawText:
+  def __init__(self, x1: int, y1: int, text: str, font: tkfont.Font) -> None:
+    self.top = y1
+    self.left = x1
+    self.text = text
+    self.font = font
+    self.bottom = y1 + font.metrics("linespace")
+
+  def execute(self, scroll: int, canvas: Canvas):
+    canvas.create_text(
+      self.left, self.top - scroll,
+      text=self.text,
+      font=self.font,
+      anchor="nw"
+    )
+
+class DrawRect:
+  def __init__(self, x1: int, y1: int, x2: int, y2: int, color: str) -> None:
+    self.top = y1
+    self.left = x1
+    self.bottom = y2
+    self.right = x2
+    self.color = color
+
+  def execute(self, scroll: int, canvas: Canvas):
+    canvas.create_rectangle(
+      self.left, self.top - scroll,
+      self.right, self.bottom - scroll,
+      width=0,
+      fill=self.color,
+    )
+
+Command = DrawText | DrawRect
+Commands = list[Command]
 
 class DisplayItem:
   x: int
@@ -291,8 +327,12 @@ class BlockLayout:
       self.height = sum([
           child.height for child in self.children])
   
-  def paint(self):
-    return self.display_list
+  def paint(self) -> Commands:
+    commands: Commands = []
+    if self.layout_mode() == LayoutMode.INLINE:
+      for x, y, word, font in self.display_list:
+        commands.append(DrawText(x1=x, y1=y, text=word, font=font))
+    return commands
 
 class DocumentLayout:
   def __init__(self, viewport_width: int, node: Node):
@@ -318,5 +358,12 @@ class DocumentLayout:
     child.layout()
     self.height = child.height
 
-  def paint(self):
+  def paint(self) -> Commands:
     return []
+
+def paint_tree(layout_object: DocumentLayout | BlockLayout,
+               display_list: Commands):
+  display_list.extend(layout_object.paint())
+
+  for child in layout_object.children:
+    paint_tree(child, display_list)
