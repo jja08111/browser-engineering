@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from tkinter import Canvas
 import tkinter.font as tkfont 
-from typing import List
+from typing import List, Optional
 import character_set
 from font_cache import get_font
 from font_weight import DEFAULT_WEIGHT, Weight
@@ -104,7 +104,7 @@ DisplayList = List[DisplayItem]
 Line = List[LineItem]
 
 class BlockLayout:
-  def __init__(self, node: Node, parent, previous):
+  def __init__(self, node: Node, parent, previous, background: Optional[str] = None):
     assert(isinstance(parent, (BlockLayout, DocumentLayout)))
     assert(isinstance(previous, BlockLayout) or previous is None)
     self.display_list: DisplayList = []
@@ -116,6 +116,11 @@ class BlockLayout:
     self.y: int | None = None
     self.width: int | None = None
     self.height: int | None = None
+    self.size: int = 12
+    self.weight: Weight = DEFAULT_WEIGHT
+    self.style: Style = DEFAULT_STYLE
+    self.is_pre: bool = False
+    self.background: Optional[str] = background
 
   def get_font(self) -> tkfont.Font:
     return get_font(self.size, self.weight, self.style, family="Courier New" if self.is_pre else None)
@@ -280,6 +285,14 @@ class BlockLayout:
         self.recurse(child)
       self.handle_close_tag(root.tag)
 
+  def set_constraints(self):
+    self.x = self.parent.x
+    self.width = self.parent.width
+    if self.previous:
+      self.y = self.previous.y + self.previous.height
+    else:
+      self.y = self.parent.y
+ 
   def layout_mode(self) -> LayoutMode:
     if isinstance(self.node, Text):
       return LayoutMode.INLINE
@@ -292,53 +305,51 @@ class BlockLayout:
     else:
       return LayoutMode.BLOCK
 
+  def convert_node_children_to_layout_object(self, previous):
+    assert(previous is None or isinstance(previous, BlockLayout))
+    for child in self.node.children:
+      if isinstance(child, Element) and child.tag == "head":
+        continue
+      next = create_layout_object(node=child, parent=self, previous=previous)
+      self.children.append(next)
+      previous = next
+
+  def layout_children(self):
+    for child in self.children:
+      child.layout()
+
+  def compute_height(self):
+    self.height = sum([
+          child.height for child in self.children])
+
   def layout(self):
-    self.x = self.parent.x
-    self.width = self.parent.width
-    if self.previous:
-      self.y = self.previous.y + self.previous.height
-    else:
-      self.y = self.parent.y
+    self.set_constraints()
     mode = self.layout_mode()
     if mode == LayoutMode.BLOCK:
-      previous: BlockLayout | None = None
-      for child in self.node.children:
-        if isinstance(child, Element) and child.tag == "head":
-          continue
-        next = create_layout_object(node=child, parent=self, previous=previous)
-        self.children.append(next)
-        previous = next
+      self.convert_node_children_to_layout_object(previous=None)
     else:
       self.cursor_x: int = 0
       self.cursor_y: int = 0
-      self.weight: Weight = DEFAULT_WEIGHT
-      self.style: Style = DEFAULT_STYLE
-      self.size: int = 12
       self.is_sup: bool = False
       self.is_abbr: bool = False
       self.abbr_buffer = ""
-      self.is_pre: bool = False
-
       self.line: Line = []
       self.recurse(root=self.node)
       self.flush()
 
       self.height = self.cursor_y
 
-    for child in self.children:
-      child.layout()
+    self.layout_children()
 
     if mode == LayoutMode.BLOCK:
-      self.height = sum([
-          child.height for child in self.children])
+      self.compute_height()
   
   def paint(self) -> Commands:
     commands: Commands = []
-    if isinstance(self.node, Element) and self.node.tag == "nav" and \
-       "class" in self.node.attributes.keys() and self.node.attributes["class"] == "links":
+    if self.background:
       commands.append(
           DrawRect(x1=self.x, y1=self.y, x2=self.x + self.width, y2=self.y + self.height,
-                   color="gray"))
+                   color=self.background))
     if self.layout_mode() == LayoutMode.INLINE:
       for x, y, word, font in self.display_list:
         commands.append(DrawText(x1=x, y1=y, text=word, font=font))
@@ -361,6 +372,34 @@ class ListItemLayout(BlockLayout):
 
   def __repr__(self) -> str:
     return f"ListLayout: {self.node}"
+
+class LinksLayout(BlockLayout):
+  @staticmethod
+  def is_links_layout(node: Node) -> bool:
+    return isinstance(node, Element) and node.tag == "nav" and \
+        "class" in node.attributes.keys() and node.attributes["class"] == "links"
+
+  def __init__(self, node: Node, parent, previous, background: Optional[str] = None):
+    super().__init__(node, parent, previous, background)
+    self.background = "gray"
+
+class TOCLayout(BlockLayout):
+  TOC_TEXT = "Table of Contents"
+  VPADDING = 8
+
+  @staticmethod
+  def is_toc_layout(node: Node) -> bool:
+    return node.tag == "nav" and "id" in node.attributes.keys() and node.attributes["id"] == "toc"
+
+  def layout(self):
+    self.set_constraints()
+    text = Text(self.TOC_TEXT, self.node)
+    text_layout = create_layout_object(node=text, parent=self, previous=None, background="gray")
+    self.children.append(text_layout)
+
+    self.convert_node_children_to_layout_object(previous=text_layout)
+    self.layout_children()
+    self.compute_height()
 
 class DocumentLayout:
   def __init__(self, viewport_width: int, node: Node):
@@ -395,7 +434,13 @@ def paint_tree(layout_object: DocumentLayout | BlockLayout,
   for child in layout_object.children:
     paint_tree(child, commands)
 
-def create_layout_object(node: Node, parent: BlockLayout | DocumentLayout, previous: BlockLayout):
-  if isinstance(node, Element) and node.tag == "li":
-    return ListItemLayout(node=node, parent=parent, previous=previous)
-  return BlockLayout(node=node, parent=parent, previous=previous)
+def create_layout_object(node: Node, parent: BlockLayout | DocumentLayout, previous: BlockLayout, 
+                         background: Optional[str] = None):
+  if isinstance(node, Element):
+    if TOCLayout.is_toc_layout(node):
+      return TOCLayout(node=node, parent=parent, previous=previous)
+    if LinksLayout.is_links_layout(node):
+      return LinksLayout(node=node, parent=parent, previous=previous)
+    if node.tag == "li":
+      return ListItemLayout(node=node, parent=parent, previous=previous)
+  return BlockLayout(node=node, parent=parent, previous=previous, background=background)
