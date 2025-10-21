@@ -107,6 +107,8 @@ class Browser:
     )
     self.document.layout()
 
+    print_tree(self.document)
+
     paint_tree(self.document, self.commands)
     self.draw_content()
     self.draw_scrollbar()
