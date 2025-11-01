@@ -22,7 +22,7 @@ BLOCK_ELEMENTS = [
   "legend", "details", "summary"
 ]
 
-TEXT_LIKE_ELEMENTS = ["i", "b"]
+TEXT_LIKE_ELEMENTS = ["i", "b", "h6"]
 
 class LayoutMode(Enum):
     INLINE = 1
@@ -228,7 +228,7 @@ class BlockLayout:
   
   def handle_open_tag(self, tag: str):
     if tag == "i":
-        self.style = "italic"
+      self.style = "italic"
     elif tag == "b":
       self.weight = "bold"
     elif tag == "small":
@@ -240,6 +240,9 @@ class BlockLayout:
     elif tag == "sup":
       self.size = int(self.size / 2)
       self.is_sup = True
+    elif tag == "h6":
+      self.style = "italic"
+      self.weight = "bold"
     elif tag == "abbr":
       self.is_abbr = True
       self.abbr_buffer = ""
@@ -248,9 +251,9 @@ class BlockLayout:
   
   def handle_close_tag(self, tag: str):
     if tag == "i":
-        self.style = DEFAULT_STYLE
+      self.style = DEFAULT_STYLE
     elif tag == "b":
-      self.weight = DEFAULT_WEIGHT 
+      self.weight = DEFAULT_WEIGHT
     elif tag == "small":
       self.size += 2
     elif tag == "big":
@@ -267,6 +270,9 @@ class BlockLayout:
       for item in self.line:
         item.x += start_x
       self.flush()
+    elif tag == "h6":
+      self.style = DEFAULT_STYLE
+      self.weight = DEFAULT_WEIGHT
     elif tag == "sup":
       self.size *= 2
       self.is_sup = False
