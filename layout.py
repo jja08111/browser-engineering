@@ -323,7 +323,7 @@ class BlockLayout:
     assert(previous is None or isinstance(previous, BlockLayout))
     text_like_elements: list[Node] = []
 
-    def create_layout_object_append(nodes: list[Node]):
+    def append_layout_object(nodes: list[Node]):
       nonlocal previous
       next = create_layout_object(nodes=nodes, parent=self, previous=previous)
       self.children.append(next)
@@ -340,13 +340,13 @@ class BlockLayout:
           text_like_elements.append(child)
         else:
           if len(text_like_elements) > 0:
-            create_layout_object_append(text_like_elements)
+            append_layout_object(text_like_elements)
             text_like_elements = []
 
-          create_layout_object_append([child])
+          append_layout_object([child])
 
       if len(text_like_elements) > 0:
-        create_layout_object_append(text_like_elements)
+        append_layout_object(text_like_elements)
         text_like_elements = []
 
   def layout_children(self):
