@@ -2,7 +2,7 @@ import tkinter
 from constant import HEIGHT, SCROLL_STEP, SCROLLBAR_PADDING, SCROLLBAR_WIDTH, WIDTH
 from layout import VSTEP, Commands, DocumentLayout, paint_tree
 from logger import print_tree
-from parser import Element, create_html_parser
+from html_parser import Element, create_html_parser
 from url import URL
 
 SCROLLBAR_BOX_WIDHT = SCROLLBAR_WIDTH + 2 * SCROLLBAR_PADDING

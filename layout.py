@@ -5,7 +5,7 @@ from typing import List, Optional
 import character_set
 from font_cache import get_font
 from font_weight import DEFAULT_WEIGHT, Weight
-from parser import Element, Text, Node
+from html_parser import Element, Text, Node
 from style import DEFAULT_STYLE, Style
 from enum import Enum
 

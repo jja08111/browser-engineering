@@ -1,5 +1,5 @@
 from layout import BlockLayout, DocumentLayout
-from parser import Node
+from html_parser import Node
 
 def print_tree(node: Node | BlockLayout | DocumentLayout, indent=0):
   print(" " * indent, node)
